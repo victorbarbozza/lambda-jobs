@@ -1,0 +1,48 @@
+name: Release
+# Publishes to npm on a `v*` tag. The tag must match the version in package.json.
+
+on:
+  push:
+    tags: ['v*']
+
+# One publish at a time, never cancelled halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: 🚀 Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: 🏷️ Tag matches package.json
+        run: |
+          version=$(bun -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME doesn't match version $version in package.json"
+            exit 1
+          fi
+
+      - name: 🔍 Typecheck
+        run: bun run typecheck
+
+      - name: 🧪 Test
+        run: bun run test
+
+      - name: 🏗️ Build
+        run: bun run build
+
+      - name: 📦 Package imports in Node
+        run: bun run test:package
+
+      - name: 🚀 Publish to npm
+        run: bun publish --access public --ignore-scripts
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
